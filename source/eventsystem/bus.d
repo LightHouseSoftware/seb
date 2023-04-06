@@ -8,6 +8,53 @@ import std.range;
 import std.array;
 import std.algorithm;
 
+/++ 
+ * Example:
+ * import std.datetime;
+ * import core.thread;
+ * import std.stdio;
+ * import eventsystem.bus;
+ *
+ * void main()
+ * {
+ * 
+ *     // register a handler function for the "foo" event
+ *     EventBus.subscribe((string event) {
+ *         if (event == "foo")
+ *         {
+ *             synchronized
+ *             {
+ *                 writeln("Event 'foo' has been received");
+ *             }
+ *         }
+ *     });
+ *     // register a handler function for the "bar" event
+ *     EventBus.subscribe((string event) {
+ *         if (event == "bar")
+ *         {
+ *             synchronized
+ *             {
+ *                 writeln("Event 'bar' has been received");
+ *             }
+ *         }
+ *     });
+ *     // start multiple threads to handle events
+ *     EventBus.startDispatching();
+ * 
+ *     // publish events to the bus
+ *     EventBus.publish("foo");
+ *     EventBus.publish("bar");
+ * 
+ *     // wait for some time so that the handlers have time to process the events
+ *     Thread.sleep(seconds(1));
+ *
+ *     scope (exit)
+ *     {
+ *         EventBus.stopDispatching;
+ *     }
+ * }
+ +/
+
 alias EventBus = EventBusSingleton.instance;
 class EventBusSingleton
 {
@@ -29,7 +76,7 @@ class EventBusSingleton
         _listeners = [];
     }
 
-    public static EventBusSingleton instance()
+    static EventBusSingleton instance()
     {
         if (!_instance)
         {
@@ -43,7 +90,7 @@ class EventBusSingleton
         return _instance;
     }
 
-    public void subscribe(shared void delegate(string) listener)
+    void subscribe(shared void delegate(string) listener)
     {
         synchronized (_busMutex)
         {
@@ -51,7 +98,7 @@ class EventBusSingleton
         }
     }
 
-    public void unsubscribe(shared void delegate(string) listener)
+    void unsubscribe(shared void delegate(string) listener)
     {
         synchronized (_busMutex)
         {
@@ -59,7 +106,7 @@ class EventBusSingleton
         }
     }
 
-    public void publish(string event)
+    void publish(string event)
     {
         _eventQueue.push(event);
 
@@ -75,7 +122,7 @@ class EventBusSingleton
         }
     }
 
-    public void startDispatching()
+    void startDispatching()
     {
         foreach (i; 0 .. _numThreads)
         {
@@ -100,6 +147,17 @@ class EventBusSingleton
             });
             thread.isDaemon(true);
             thread.start();
+        }
+    }
+
+    void stopDispatching()
+    {
+        foreach (i; 0 .. _numThreads)
+        {
+            _eventQueue.push("");
+
+            // Wait for the thread to terminate
+            Thread.sleep(msecs(100));
         }
     }
 }
