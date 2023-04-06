@@ -1,7 +1,7 @@
 module eventsystem.bus;
 
-import core.thread;
 import std.parallelism;
+import core.thread;
 import core.sync.mutex;
 import core.sync.semaphore;
 import std.range;
