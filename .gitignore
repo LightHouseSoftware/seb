@@ -1,0 +1,16 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/eventsystem
+eventsystem.so
+eventsystem.dylib
+eventsystem.dll
+eventsystem.a
+eventsystem.lib
+eventsystem-test-*
+*.exe
+*.pdb
+*.o
+*.obj
+*.lst
