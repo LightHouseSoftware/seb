@@ -8,43 +8,27 @@ The event system consists of an `EventBusSingleton` class that manages event pub
 
 The event bus uses D's `std.parallelism` library to handle events in parallel across multiple threads, ensuring efficient utilization of system resources.
 
+**Please note that the library does not provide a subscription to an event not from the main thread.** **Perhaps we will do this in the future.**
+
 ## Usage
 
 ### Subscribing to Events
 
-Subscribers can register a delegate function that will be invoked whenever an event is published. Here is an example of subscribing to the "foo" and "bar" events:
+Subscribers can register a delegate function that will be called whenever an event of a particular type is posted:
 
 ```d
-// register a handler function for the "foo" event
-EventBus.subscribe((string event) {
-    if (event == "foo")
-    {
-        synchronized
-        {
-            writeln("Event 'foo' has been received");
-        }
-    }
-});
-
-// register a handler function for the "bar" event
-EventBus.subscribe((string event) {
-    if (event == "bar")
-    {
-        synchronized
-        {
-            writeln("Event 'bar' has been received");
-        }
-    }
+// register a handler function for the TestEvent
+EventBus.subscribe!TestEvent((event) {
+	writeln("Test event has occurred");
 });
 ```
 
 ### Publishing Events
 
-Events can be published to the bus by calling the `publish` function:
+Event can be published to the bus by calling the `publish` function:
 
 ```d
-EventBus.publish("foo");
-EventBus.publish("bar");
+EventBus.publish(new TestEvent);
 ```
 
 ### Starting and Stopping Event Dispatching
@@ -66,43 +50,37 @@ EventBus.stopDispatching();
 Here is a complete example of using the event system:
 
 ```d
-import std.datetime;
-import core.thread;
+import eventsystem;
 import std.stdio;
-import eventsystem.bus;
+
+class TestEvent : Event {}
+
+class KeyPressEvent : Event
+{
+    int keyCode;
+    this(int code)
+    {
+        keyCode = code;
+    }
+}
 
 void main()
 {
     // Register event handlers
-    EventBus.subscribe((string event) {
-        if (event == "foo")
-        {
-            synchronized
-            {
-                writeln("Event 'foo' has been received");
-            }
-        }
+    EventBus.subscribe!TestEvent((event) {
+        writeln("Test event has occurred");
     });
-    
-    EventBus.subscribe((string event) {
-        if (event == "bar")
-        {
-            synchronized
-            {
-                writeln("Event 'bar' has been received");
-            }
-        }
+  
+    EventBus.subscribe!KeyPressEvent((event) {
+        writeln("Key with code ", event.keyCode, " has been pressed!");
     });
 
     // Start dispatching events
     EventBus.startDispatching();
 
     // Publish events
-    EventBus.publish("foo");
-    EventBus.publish("bar");
-
-    // Wait for some time so that the handlers have time to process the events
-    Thread.sleep(seconds(1));
+    EventBus.publish(new TestEvent);
+    EventBus.publish(new KeyPressEvent(42));
 
     scope (exit)
     {
@@ -114,6 +92,6 @@ void main()
 This will print:
 
 ```text
-Event 'foo' has been received
-Event 'bar' has been received
+Test event has occurred
+Key with code 42 has been pressed!
 ```
