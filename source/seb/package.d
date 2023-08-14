@@ -1,4 +1,4 @@
-module eventsystem.bus;
+module seb;
 
 import core.sync.mutex;
 import core.sync.semaphore;
@@ -7,7 +7,7 @@ import std.container.dlist;
 import std.parallelism;
 
 /++ 
- * import eventsystem;
+ * import seb;
 
    // Define a simple TestEvent derived from Event
    class TestEvent : Event {}
@@ -53,12 +53,12 @@ abstract class Event
 {
 }
 
-alias EventBus = EventBusSingleton.instance;
-class EventBusSingleton
+alias EventBus = SEBSingleton.instance;
+class SEBSingleton
 {
     private
     {
-        static EventBusSingleton _instance;
+        static SEBSingleton _instance;
         Mutex _busMutex;
         SafeQueue!Event _eventQueue;
         Semaphore _terminationSemaphore;
@@ -75,14 +75,14 @@ class EventBusSingleton
         _numThreads = defaultPoolThreads();
     }
 
-    static EventBusSingleton instance()
+    static SEBSingleton instance()
     {
         if (!_instance)
         {
-            synchronized (EventBusSingleton.classinfo)
+            synchronized (SEBSingleton.classinfo)
             {
                 if (!_instance)
-                    _instance = new EventBusSingleton;
+                    _instance = new SEBSingleton;
             }
         }
         return _instance;

@@ -1,10 +1,10 @@
-# Thread-Safe Multithreaded Event System
+# **Simple event bus —** Thread-Safe Multithreaded Event System
 
 This repository contains a simple implementation of a thread-safe, multithreaded event system in the D programming language.
 
 ## Overview
 
-The event system consists of an `EventBusSingleton` class that manages event publication and subscription. The event bus can have multiple subscribers that listen for events. When an event is published, all subscribers will receive the event and can react accordingly.
+The event system consists of an `SEBSingleton` class that manages event publication and subscription. The event bus can have multiple subscribers that listen for events. When an event is published, all subscribers will receive the event and can react accordingly.
 
 The event bus uses D's `std.parallelism` library to handle events in parallel across multiple threads, ensuring efficient utilization of system resources.
 

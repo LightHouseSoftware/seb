@@ -1,5 +1,5 @@
 name "eventsystem"
-description "The simple thread-safety multithreaded event system"
+description "Simple event bus — The simple thread-safety multithreaded event system"
 authors "Bagomot"
 copyright "Copyright © 2023, LightHouse Software"
 license "ESL 1.0"
