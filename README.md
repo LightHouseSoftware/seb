@@ -50,7 +50,7 @@ EventBus.stopDispatching();
 Here is a complete example of using the event system:
 
 ```d
-import eventsystem;
+import seb;
 import std.stdio;
 
 class TestEvent : Event {}
