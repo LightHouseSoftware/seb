@@ -1,3 +1,3 @@
 module eventsystem;
 
-import eventsystem.bus;
+public import eventsystem.bus;

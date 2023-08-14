@@ -1,59 +1,57 @@
 module eventsystem.bus;
 
-import std.parallelism;
-import core.thread;
 import core.sync.mutex;
 import core.sync.semaphore;
-import std.range;
-import std.array;
-import std.algorithm;
+import core.thread;
+import std.container.dlist;
+import std.parallelism;
 
 /++ 
- * Example:
- * import std.datetime;
- * import core.thread;
- * import std.stdio;
- * import eventsystem.bus;
- *
- * void main()
- * {
- * 
- *     // register a handler function for the "foo" event
- *     EventBus.subscribe((string event) {
- *         if (event == "foo")
- *         {
- *             synchronized
- *             {
- *                 writeln("Event 'foo' has been received");
- *             }
- *         }
- *     });
- *     // register a handler function for the "bar" event
- *     EventBus.subscribe((string event) {
- *         if (event == "bar")
- *         {
- *             synchronized
- *             {
- *                 writeln("Event 'bar' has been received");
- *             }
- *         }
- *     });
- *     // start multiple threads to handle events
- *     EventBus.startDispatching();
- * 
- *     // publish events to the bus
- *     EventBus.publish("foo");
- *     EventBus.publish("bar");
- * 
- *     // wait for some time so that the handlers have time to process the events
- *     Thread.sleep(seconds(1));
- *
- *     scope (exit)
- *     {
- *         EventBus.stopDispatching;
- *     }
- * }
+ * import eventsystem;
+
+   // Define a simple TestEvent derived from Event
+   class TestEvent : Event {}
+   
+   // Define a KeyPressEvent derived from Event which captures a keyCode
+   class KeyPressEvent : Event
+   {
+       int keyCode;
+       this(int code)
+       {
+           keyCode = code;
+       }
+   }
+   
+   void main()
+   {
+       // Register an event handler for the TestEvent
+       EventBus.subscribe!TestEvent((event) {
+            writeln("Test event has occurred");
+       });
+   
+       // Register an event handler for the KeyPressEvent
+       EventBus.subscribe!KeyPressEvent((event) {
+            writeln("Key with code ", event.keyCode, " has been pressed!");
+       });
+       
+       // Start multiple threads to handle the events
+       EventBus.startDispatching();
+   
+       // Publish events to the event bus
+       EventBus.publish(new TestEvent); // Trigger the TestEvent
+       EventBus.publish(new KeyPressEvent(42)); // Example of a key code
+   
+       // Ensure that dispatching stops when exiting the scope
+       scope (exit)
+       {
+           EventBus.stopDispatching;
+       }
+   }
  +/
+
+abstract class Event
+{
+}
 
 alias EventBus = EventBusSingleton.instance;
 class EventBusSingleton
@@ -61,19 +59,20 @@ class EventBusSingleton
     private
     {
         static EventBusSingleton _instance;
-        static Mutex _busMutex;
-        SafeQueue!string _eventQueue;
-        shared void delegate(string)[] _listeners;
-        static size_t _numThreads;
+        Mutex _busMutex;
+        SafeQueue!Event _eventQueue;
+        Semaphore _terminationSemaphore;
+        void delegate(Event)[][string] _listenersByType;
+        size_t _numThreads;
     }
 
     private this()
     {
         _busMutex = new Mutex;
         auto semaphore = new Semaphore(0);
-        _eventQueue = new SafeQueue!string(semaphore);
+        _terminationSemaphore = new Semaphore(0);
+        _eventQueue = new SafeQueue!Event(semaphore);
         _numThreads = defaultPoolThreads();
-        _listeners = [];
     }
 
     static EventBusSingleton instance()
@@ -86,39 +85,41 @@ class EventBusSingleton
                     _instance = new EventBusSingleton;
             }
         }
-
         return _instance;
     }
 
-    void subscribe(shared void delegate(string) listener)
+    void numThreads(size_t value) @property
+    {
+        _numThreads = value;
+    }
+
+    void subscribe(T : Event)(void delegate(T) listener)
     {
         synchronized (_busMutex)
         {
-            _listeners ~= listener;
+            auto key = typeid(T).toString();
+            if (key in _listenersByType)
+            {
+                _listenersByType[key] ~= cast(void delegate(Event)) listener;
+            }
+            else
+            {
+                _listenersByType[key] = [cast(void delegate(Event)) listener];
+            }
         }
     }
 
-    void unsubscribe(shared void delegate(string) listener)
-    {
-        synchronized (_busMutex)
-        {
-            _listeners = _listeners.remove!(a => a == listener);
-        }
-    }
-
-    void publish(string event)
+    void publish(T : Event)(T event)
     {
         _eventQueue.push(event);
 
-        void delegate(string)[] listeners;
+        void delegate(Event)[] listeners;
         synchronized (_busMutex)
         {
-            listeners = cast(void delegate(string)[]) _listeners.dup;
-        }
-
-        foreach (listener; listeners.parallel)
-        {
-            listener(event);
+            auto key = event.classinfo.toString();
+            listeners = key in _listenersByType ? _listenersByType[key] : null;
+            if (listeners is null)
+                listeners = [];
         }
     }
 
@@ -130,34 +131,41 @@ class EventBusSingleton
                 while (true)
                 {
                     auto event = _eventQueue.pop;
-                    if (event == "")
-                        continue;
+                    if (event is null)
+                        break; // thread stopping
 
-                    void delegate(string)[] listeners;
+                    void delegate(Event)[] listeners;
                     synchronized (_busMutex)
                     {
-                        listeners = cast(void delegate(string)[]) _listeners.dup;
+                        auto key = event.classinfo.toString();
+                        listeners = key in _listenersByType ? _listenersByType[key] : null;
                     }
 
-                    foreach (listener; listeners.parallel)
+                    if (listeners !is null)
                     {
-                        listener(event);
+                        foreach (listener; listeners)
+                        {
+                            listener(event);
+                        }
                     }
                 }
+                _terminationSemaphore.notify();
             });
-            thread.isDaemon(true);
+            thread.isDaemon(false);
             thread.start();
         }
     }
 
     void stopDispatching()
     {
-        foreach (i; 0 .. _numThreads)
+        foreach (_; 0 .. _numThreads)
         {
-            _eventQueue.push("");
+            _eventQueue.push(null);
+        }
 
-            // Wait for the thread to terminate
-            Thread.sleep(msecs(100));
+        foreach (_; 0 .. _numThreads)
+        {
+            _terminationSemaphore.wait();
         }
     }
 }
@@ -166,7 +174,7 @@ class SafeQueue(T)
 {
     private
     {
-        T[] _elements;
+        DList!T _elements;
         Semaphore _semaphore;
     }
 
@@ -179,7 +187,7 @@ class SafeQueue(T)
     {
         synchronized
         {
-            _elements ~= value;
+            _elements.insertBack(value);
             _semaphore.notify;
         }
     }
@@ -189,8 +197,8 @@ class SafeQueue(T)
         _semaphore.wait;
         synchronized
         {
-            T value = _elements.front;
-            _elements = _elements[1 .. $];
+            auto value = _elements.front;
+            _elements.removeFront();
             return value;
         }
     }
