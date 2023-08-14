@@ -45,7 +45,7 @@ To stop dispatching events, call the `stopDispatching` method:
 EventBus.stopDispatching();
 ```
 
-## Example
+### Example
 
 Here is a complete example of using the event system:
 
@@ -95,3 +95,8 @@ This will print:
 Test event has occurred
 Key with code 42 has been pressed!
 ```
+
+### TO DO
+
+* [ ] **Cancelable events**
+* [ ] **Subscribe to an event from another thread**

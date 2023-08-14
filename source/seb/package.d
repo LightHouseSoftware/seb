@@ -170,7 +170,7 @@ class SEBSingleton
     }
 }
 
-class SafeQueue(T)
+private class SafeQueue(T)
 {
     private
     {
