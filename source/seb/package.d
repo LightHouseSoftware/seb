@@ -77,6 +77,9 @@ class SEBSingleton
         size_t _numThreads;
     }
 
+    alias start = startDispatching;
+    alias stop = stopDispatching;
+
     private this()
     {
         _busMutex = new Mutex;
