@@ -73,7 +73,7 @@ class SEBSingleton
         Mutex _busMutex;
         SafeQueue!Event _eventQueue;
         Semaphore _terminationSemaphore;
-        void delegate(Event)[][string] _listenersByType;
+        void delegate(Event)[][string] _listeners;
         size_t _numThreads;
     }
 
@@ -108,14 +108,14 @@ class SEBSingleton
     {
         synchronized (_busMutex)
         {
-            auto key = typeid(T).toString();
-            if (key in _listenersByType)
+            auto typeId = typeid(T).toString();
+            if (typeId in _listeners)
             {
-                _listenersByType[key] ~= cast(void delegate(Event)) listener;
+                _listeners[typeId] ~= cast(void delegate(Event)) listener;
             }
             else
             {
-                _listenersByType[key] = [cast(void delegate(Event)) listener];
+                _listeners[typeId] = [cast(void delegate(Event)) listener];
             }
         }
     }
@@ -129,8 +129,8 @@ class SEBSingleton
             void delegate(Event)[] listeners;
             synchronized (_busMutex)
             {
-                auto key = event.classinfo.toString();
-                listeners = key in _listenersByType ? _listenersByType[key] : null;
+                auto typeId = event.classinfo.toString();
+                listeners = typeId in _listeners ? _listeners[typeId] : null;
                 if (listeners is null)
                     listeners = [];
             }
@@ -154,8 +154,8 @@ class SEBSingleton
                     void delegate(Event)[] listeners;
                     synchronized (_busMutex)
                     {
-                        auto key = event.classinfo.toString();
-                        listeners = key in _listenersByType ? _listenersByType[key] : null;
+                        auto typeId = event.classinfo.toString();
+                        listeners = typeId in _listeners ? _listeners[typeId] : null;
                     }
 
                     if (listeners !is null)
