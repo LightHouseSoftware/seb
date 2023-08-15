@@ -51,6 +51,17 @@ import std.parallelism;
 
 abstract class Event
 {
+    private bool _isCancelled = false;
+
+    void cancel()
+    {
+        _isCancelled = true;
+    }
+
+    auto isCancelled() @property const
+    {
+        return _isCancelled;
+    }
 }
 
 alias EventBus = SEBSingleton.instance;
@@ -111,15 +122,18 @@ class SEBSingleton
 
     void publish(T : Event)(T event)
     {
-        _eventQueue.push(event);
-
-        void delegate(Event)[] listeners;
-        synchronized (_busMutex)
+        if (!event.isCancelled)
         {
-            auto key = event.classinfo.toString();
-            listeners = key in _listenersByType ? _listenersByType[key] : null;
-            if (listeners is null)
-                listeners = [];
+            _eventQueue.push(event);
+
+            void delegate(Event)[] listeners;
+            synchronized (_busMutex)
+            {
+                auto key = event.classinfo.toString();
+                listeners = key in _listenersByType ? _listenersByType[key] : null;
+                if (listeners is null)
+                    listeners = [];
+            }
         }
     }
 
@@ -134,6 +148,9 @@ class SEBSingleton
                     if (event is null)
                         break; // thread stopping
 
+                    if (event.isCancelled)
+                        continue; // skip processing this event
+
                     void delegate(Event)[] listeners;
                     synchronized (_busMutex)
                     {
@@ -146,6 +163,10 @@ class SEBSingleton
                         foreach (listener; listeners)
                         {
                             listener(event);
+
+                            //canceling the event by the listener
+                            if (event.isCancelled)
+                                break;
                         }
                     }
                 }

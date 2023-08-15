@@ -45,6 +45,18 @@ To stop dispatching events, call the `stopDispatching` method:
 EventBus.stopDispatching();
 ```
 
+### **Event cancellation**
+
+```D
+EventBus.subscribe!KeyPressEvent((event) {
+	if(event.keyCode == 42) {
+		event.cancel;
+	}
+});
+```
+
+After the event is cancelled, it is lazily removed from the queue.
+
 ### Example
 
 Here is a complete example of using the event system:
@@ -98,5 +110,6 @@ Key with code 42 has been pressed!
 
 ### TO DO
 
-* [ ] **Cancelable events**
+* [X] **Cancelable events**
+* [ ] **Subscriber priority**
 * [ ] **Subscribe to an event from another thread**
