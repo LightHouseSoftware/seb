@@ -126,18 +126,7 @@ class SEBSingleton
     void publish(T : Event)(T event)
     {
         if (!event.isCancelled)
-        {
             _eventQueue.push(event);
-
-            void delegate(Event)[] listeners;
-            synchronized (_busMutex)
-            {
-                auto typeId = event.classinfo.toString();
-                listeners = typeId in _listeners ? _listeners[typeId] : null;
-                if (listeners is null)
-                    listeners = [];
-            }
-        }
     }
 
     void startDispatching()

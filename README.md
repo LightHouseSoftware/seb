@@ -111,5 +111,9 @@ Key with code 42 has been pressed!
 ### TO DO
 
 * [X] **Cancelable events**
+* [ ] **Rewrite to actor model**
 * [ ] **Subscriber priority**
+* [ ] **Unsubscribe**
+* [ ] **Middleware**
 * [ ] **Subscribe to an event from another thread**
+* [ ] **Unittests**
