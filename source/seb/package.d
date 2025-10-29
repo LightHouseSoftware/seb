@@ -74,7 +74,11 @@ class SEBSingleton
         SafeQueue!Event _eventQueue;
         Semaphore _terminationSemaphore;
         void delegate(Event)[][string] _listeners;
+
         size_t _numThreads;
+        size_t _runningThreads = 0;
+        Thread[] _threads;
+        bool _isRunning = false;
     }
 
     alias start = startDispatching;
@@ -113,13 +117,9 @@ class SEBSingleton
         {
             auto typeId = typeid(T).toString();
             if (typeId in _listeners)
-            {
                 _listeners[typeId] ~= cast(void delegate(Event)) listener;
-            }
             else
-            {
                 _listeners[typeId] = [cast(void delegate(Event)) listener];
-            }
         }
     }
 
@@ -131,54 +131,82 @@ class SEBSingleton
 
     void startDispatching()
     {
-        foreach (i; 0 .. _numThreads)
+        synchronized (_busMutex)
         {
-            auto thread = new Thread(() {
-                while (true)
-                {
-                    auto event = _eventQueue.pop;
-                    if (event is null)
-                        break; // thread stopping
+            if (_isRunning)
+                return;
 
-                    if (event.isCancelled)
-                        continue; // skip processing this event
+            _threads.length = 0;
+            _runningThreads = 0;
 
-                    void delegate(Event)[] listeners;
-                    synchronized (_busMutex)
+            foreach (i; 0 .. _numThreads)
+            {
+                auto thread = new Thread(() {
+                    while (true)
                     {
-                        auto typeId = event.classinfo.toString();
-                        listeners = typeId in _listeners ? _listeners[typeId] : null;
-                    }
+                        auto event = _eventQueue.pop;
+                        if (event is null)
+                            break; // thread stopping
 
-                    if (listeners !is null)
-                    {
-                        foreach (listener; listeners)
+                        if (event.isCancelled)
+                            continue;
+
+                        void delegate(Event)[] listeners;
+                        synchronized (_busMutex)
                         {
-                            listener(event);
+                            auto typeId = event.classinfo.toString();
+                            listeners = typeId in _listeners ? _listeners[typeId] : null;
+                        }
 
-                            //canceling the event by the listener
-                            if (event.isCancelled)
-                                break;
+                        if (listeners !is null)
+                        {
+                            foreach (listener; listeners)
+                            {
+                                listener(event);
+                                if (event.isCancelled)
+                                    break;
+                            }
                         }
                     }
-                }
-                _terminationSemaphore.notify();
-            });
-            thread.isDaemon(false);
-            thread.start();
+                    _terminationSemaphore.notify();
+                });
+                thread.isDaemon(false);
+                thread.start();
+
+                _threads ~= thread;
+                ++_runningThreads;
+            }
+
+            _isRunning = true;
         }
     }
 
     void stopDispatching()
     {
-        foreach (_; 0 .. _numThreads)
+        size_t toStop;
+
+        synchronized (_busMutex)
         {
-            _eventQueue.push(null);
+            if (!_isRunning || _runningThreads == 0)
+                return;
+
+            toStop = _runningThreads;
+
+            foreach (_; 0 .. toStop)
+                _eventQueue.push(null);
         }
 
-        foreach (_; 0 .. _numThreads)
-        {
+        foreach (_; 0 .. toStop)
             _terminationSemaphore.wait();
+
+        foreach (t; _threads)
+            t.join();
+
+        synchronized (_busMutex)
+        {
+            _threads.length = 0;
+            _runningThreads = 0;
+            _isRunning = false;
         }
     }
 }
