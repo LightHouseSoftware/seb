@@ -5,6 +5,7 @@ import core.sync.semaphore;
 import core.thread;
 import std.container.dlist;
 import std.parallelism;
+import std.conv;
 
 /++ 
  * import seb;
@@ -125,8 +126,11 @@ class SEBSingleton
 
     void publish(T : Event)(T event)
     {
-        if (!event.isCancelled)
-            _eventQueue.push(event);
+        if (event.isCancelled)
+            return;
+        if (!_isRunning)
+            return;
+        _eventQueue.push(event);
     }
 
     void startDispatching()
@@ -170,7 +174,8 @@ class SEBSingleton
                     }
                     _terminationSemaphore.notify();
                 });
-                thread.isDaemon(false);
+                thread.name = "EventBusWorker-" ~ i.to!string;
+                thread.isDaemon = true;
                 thread.start();
 
                 _threads ~= thread;
@@ -183,30 +188,28 @@ class SEBSingleton
 
     void stopDispatching()
     {
-        size_t toStop;
+        Thread[] threadsToJoin;
 
         synchronized (_busMutex)
         {
-            if (!_isRunning || _runningThreads == 0)
+            if (!_isRunning)
                 return;
 
-            toStop = _runningThreads;
+            _isRunning = false;
 
-            foreach (_; 0 .. toStop)
-                _eventQueue.push(null);
+            threadsToJoin = _threads.dup;
         }
 
-        foreach (_; 0 .. toStop)
-            _terminationSemaphore.wait();
+        foreach (_; 0 .. threadsToJoin.length)
+            _eventQueue.push(null);
 
-        foreach (t; _threads)
+        foreach (t; threadsToJoin)
             t.join();
 
         synchronized (_busMutex)
         {
             _threads.length = 0;
             _runningThreads = 0;
-            _isRunning = false;
         }
     }
 }
